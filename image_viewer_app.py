@@ -22,8 +22,43 @@ class ImageViewerApp:
         self.session_duration = session_duration
         self.mode = mode
         self.image_time = image_time  # Durée par image pour le mode normal
-        self.image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))]
+        self.settings_menu = settings_menu
         
+        # Charger les images
+        self.image_files = []
+        
+        # Utiliser l'option de lecture récursive si elle est activée
+        try:
+            use_recursive = settings_menu and settings_menu.settings.get("recursive_read", False)
+            if use_recursive:
+                print(f"Tentative de chargement récursif des images depuis {folder_path}")
+                self.image_files = self.get_image_files_recursive(folder_path)
+                
+                # Si aucune image n'a été trouvée avec la méthode récursive, utiliser la méthode standard
+                if not self.image_files:
+                    print("Aucune image trouvée avec la méthode récursive, utilisation de la méthode standard")
+                    self.image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))]
+            else:
+                print(f"Chargement standard des images depuis {folder_path}")
+                self.image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))]
+        except Exception as e:
+            print(f"Erreur lors du chargement des images: {e}")
+            print("Tentative de chargement avec la méthode standard")
+            try:
+                self.image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))]
+            except Exception as e2:
+                print(f"Erreur lors du chargement standard des images: {e2}")
+                self.image_files = []
+        
+        # Vérifier qu'il y a des images à afficher
+        if not self.image_files:
+            tk.messagebox.showerror("Erreur", f"Aucune image trouvée dans le dossier '{folder_path}'.")
+            self.root.destroy()
+            choose_session_duration()
+            return
+            
+        print(f"Nombre d'images chargées: {len(self.image_files)}")
+            
         random.shuffle(self.image_files)
         self.current_index = random.randint(0, len(self.image_files) - 1)
         self.done_images_number = 0
@@ -39,7 +74,6 @@ class ImageViewerApp:
         self.mirror_vertical = False
 
         self.start_size = (1000, 800)
-        self.settings_menu = settings_menu;
         # Calcul du temps par image en mode "classe" (progressif)
         if mode == "classe":
             self.class_mode_times = self.calculate_class_mode_times(session_duration)
@@ -64,6 +98,9 @@ class ImageViewerApp:
 
         self.session_time_label = tk.Label(self.top_bar, text="Temps total écoulé : 00:00", fg="white", bg="black", font=("Arial", 12))
         self.session_time_label.pack(side=tk.LEFT, padx=10)
+
+        self.images_count_label = tk.Label(self.top_bar, text=f"Images : {len(self.image_files)}", fg="white", bg="black", font=("Arial", 12))
+        self.images_count_label.pack(side=tk.LEFT, padx=10)
 
         self.image_time_label = tk.Label(self.top_bar, text="Temps restant sur l'image : 00:00", fg="white", bg="black", font=("Arial", 12))
         self.image_time_label.pack(side=tk.RIGHT, padx=10)
@@ -113,6 +150,61 @@ class ImageViewerApp:
         # self.root.bind("<Configure>", self.resize_image)  # Écouter les événements de redimensionnement
         self.update_timer()
 
+    def get_image_files_recursive(self, folder_path):
+        """Récupérer tous les fichiers d'images de manière récursive dans le dossier et ses sous-dossiers."""
+        image_files = []
+        
+        # Vérifier que le dossier existe et est accessible
+        if not os.path.exists(folder_path):
+            print(f"Erreur: Le dossier '{folder_path}' n'existe pas.")
+            return image_files
+        
+        if not os.path.isdir(folder_path):
+            print(f"Erreur: '{folder_path}' n'est pas un dossier valide.")
+            return image_files
+            
+        try:
+            # Normaliser le chemin pour Windows
+            folder_path = os.path.normpath(folder_path)
+            print(f"Chemin normalisé: {folder_path}")
+            
+            # Utiliser os.walk() mais avec gestion d'erreurs
+            for dirpath, _, filenames in os.walk(folder_path):
+                for filename in filenames:
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')):
+                        # Construire le chemin relatif de manière sécurisée
+                        try:
+                            # Chemin absolu du fichier
+                            abs_file_path = os.path.join(dirpath, filename)
+                            # Calculer le chemin relatif par rapport au dossier principal
+                            rel_file_path = os.path.relpath(abs_file_path, folder_path)
+                            image_files.append(rel_file_path)
+                        except Exception as e:
+                            print(f"Erreur de calcul pour le chemin relatif de {dirpath}/{filename}: {e}")
+                            # En cas d'erreur, on peut essayer d'ajouter uniquement le nom du fichier
+                            # si le fichier est dans un sous-dossier direct
+                            try:
+                                subdir = os.path.basename(dirpath)
+                                if dirpath != folder_path:
+                                    image_files.append(os.path.join(subdir, filename))
+                                else:
+                                    image_files.append(filename)
+                            except:
+                                pass
+            
+            print(f"Nombre d'images trouvées en mode récursif: {len(image_files)}")
+            
+        except Exception as e:
+            print(f"Erreur lors de la lecture récursive du dossier '{folder_path}': {e}")
+            # En cas d'erreur, retourner au moins les fichiers du dossier principal
+            try:
+                image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'))]
+                print(f"Nombre d'images trouvées en mode non-récursif: {len(image_files)}")
+            except Exception as e2:
+                print(f"Erreur lors de la lecture simple du dossier: {e2}")
+                
+        return image_files
+
     def bind_keys(self):
         """Lier les touches du clavier pour naviguer."""
         self.root.bind("<Left>", lambda event: self.prev_image())
@@ -121,8 +213,68 @@ class ImageViewerApp:
 
     def show_image(self, index):
         """Afficher l'image redimensionnée à la taille de la fenêtre."""
-        self.image_path = os.path.join(self.folder_path, self.image_files[index])
-        self.load_image()
+        try:
+            # Vérifier qu'il y a des images à afficher
+            if not self.image_files:
+                print("Aucune image trouvée dans le dossier.")
+                return
+                
+            if index < 0 or index >= len(self.image_files):
+                index = 0  # Réinitialiser à la première image si index invalide
+            
+            # Construire le chemin complet de l'image
+            image_filename = self.image_files[index]
+            
+            # Normaliser les séparateurs de chemins selon le système d'exploitation
+            image_filename = image_filename.replace('/', os.path.sep).replace('\\', os.path.sep)
+            
+            # Construire et normaliser le chemin complet
+            self.image_path = os.path.normpath(os.path.join(self.folder_path, image_filename))
+            
+            print(f"Tentative d'affichage de l'image: {self.image_path}")
+            
+            # Vérifier si le fichier existe
+            if not os.path.exists(self.image_path):
+                print(f"Fichier introuvable: {self.image_path}")
+                
+                # Essayer avec d'autres méthodes de construction de chemin
+                alt_paths = []
+                
+                # Méthode 1: Utiliser juste le nom de fichier sans chemin
+                if os.path.sep in image_filename:
+                    filename_only = os.path.basename(image_filename)
+                    alt_path1 = os.path.join(self.folder_path, filename_only)
+                    alt_paths.append(alt_path1)
+                
+                # Méthode 2: Pour les chemins Windows avec lecteurs (C:, D:, etc.)
+                if ':' in self.folder_path and os.path.sep in image_filename:
+                    drive = os.path.splitdrive(self.folder_path)[0]
+                    alt_path2 = os.path.join(drive + os.path.sep, image_filename)
+                    alt_paths.append(alt_path2)
+                
+                # Essayer chaque chemin alternatif
+                found_valid_path = False
+                for alt_path in alt_paths:
+                    print(f"Tentative avec chemin alternatif: {alt_path}")
+                    if os.path.exists(alt_path):
+                        self.image_path = alt_path
+                        print(f"Chemin valide trouvé: {self.image_path}")
+                        found_valid_path = True
+                        break
+                
+                # Si aucun chemin alternatif ne fonctionne, passer à l'image suivante
+                if not found_valid_path:
+                    print("Impossible de trouver un chemin valide pour l'image.")
+                    self.next_image()
+                    return
+            
+            self.load_image()
+        except Exception as e:
+            print(f"Erreur lors de l'affichage de l'image: {e}")
+            # En cas d'erreur, essayer d'afficher une autre image
+            if len(self.image_files) > 1:
+                self.current_index = (index + 1) % len(self.image_files)
+                self.show_image(self.current_index)
 
     def format_time(self, seconds):
         """Convertit un temps en secondes en un format HH:MM:SS si supérieur à 1 heure, sinon MM:SS ou SS."""
@@ -138,40 +290,55 @@ class ImageViewerApp:
         
     def load_image(self):
         """Charger et redimensionner l'image à la taille de la fenêtre."""
-        img = Image.open(self.image_path)
-        window_width = self.root.winfo_width()
-        window_height = self.root.winfo_height()
-        
-        img_width, img_height = img.size
-        window_ratio = window_width / window_height
-        img_ratio = img_width / img_height
+        try:
+            # Vérifier que le fichier existe
+            if not os.path.exists(self.image_path):
+                print(f"Erreur: Le fichier '{self.image_path}' n'existe pas.")
+                # Passer à l'image suivante
+                self.next_image()
+                return
+                
+            img = Image.open(self.image_path)
+            window_width = self.root.winfo_width()
+            window_height = self.root.winfo_height()
+            
+            # S'assurer que la fenêtre a une taille valide
+            if window_width <= 1 or window_height <= 1:
+                window_width = 1000
+                window_height = 800
+            
+            img_width, img_height = img.size
+            window_ratio = window_width / window_height
+            img_ratio = img_width / img_height
 
-        self.start_size = img_width, img_height
+            self.start_size = img_width, img_height
 
-        if window_ratio > img_ratio:
-            # Ajuster l'image pour que sa hauteur soit égale à la hauteur de la fenêtre
-            new_height = window_height
-            new_width = int(new_height * img_ratio)
-        else:
-            # Ajuster l'image pour que sa largeur soit égale à la largeur de la fenêtre
-            new_width = window_width
-            new_height = int(new_width / img_ratio)
+            if window_ratio > img_ratio:
+                # Ajuster l'image pour que sa hauteur soit égale à la hauteur de la fenêtre
+                new_height = window_height
+                new_width = int(new_height * img_ratio)
+            else:
+                # Ajuster l'image pour que sa largeur soit égale à la largeur de la fenêtre
+                new_width = window_width
+                new_height = int(new_width / img_ratio)
 
-        if new_width == 0 or new_height == 0:
-            img = img.resize((img.width, img.height), Image.Resampling.LANCZOS)
+            if new_width <= 0 or new_height <= 0:
+                new_width = img_width
+                new_height = img_height
+
+            # Appliquer les miroirs si activés
+            if self.mirror_horizontal:
+                img = ImageOps.mirror(img)
+            if self.mirror_vertical:
+                img = ImageOps.flip(img)
+            
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             self.img = ImageTk.PhotoImage(img)
             self.label.config(image=self.img)
-            return
-
-        # Appliquer les miroirs si activés
-        if self.mirror_horizontal:
-            img = ImageOps.mirror(img)
-        if self.mirror_vertical:
-            img = ImageOps.flip(img)
-        
-        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        self.img = ImageTk.PhotoImage(img)
-        self.label.config(image=self.img)
+        except Exception as e:
+            print(f"Erreur lors du chargement de l'image {self.image_path}: {e}")
+            # En cas d'erreur, passer à l'image suivante
+            self.next_image()
 
     def resize_image(self, event):
         """Redimensionner l'image lors du redimensionnement de la fenêtre."""
@@ -319,14 +486,57 @@ def choose_session_duration():
 
     def start_session(duration, mode, image_time, settings_menu):
         """Lancer la session avec la durée choisie."""
-        if settings_menu.settings.get("current_folder") == None:
-            tk.messagebox.showerror("Error", f"Select a folder to use first. Up in the parameters. You only have to do it once.")
+        if settings_menu.settings.get("current_folder") is None:
+            tk.messagebox.showerror("Erreur", "Veuillez sélectionner un dossier dans les paramètres. Vous n'avez besoin de le faire qu'une seule fois.")
             return
+            
+        folder_path = settings_menu.settings["current_folder"]
+        
+        # Vérifier que le dossier existe et est accessible
+        if not os.path.exists(folder_path):
+            tk.messagebox.showerror("Erreur", f"Le dossier '{folder_path}' n'existe pas. Veuillez sélectionner un dossier valide dans les paramètres.")
+            return
+            
+        if not os.path.isdir(folder_path):
+            tk.messagebox.showerror("Erreur", f"'{folder_path}' n'est pas un dossier valide. Veuillez sélectionner un dossier valide dans les paramètres.")
+            return
+            
+        # Normaliser le chemin pour Windows
+        folder_path = os.path.normpath(folder_path)
+        print(f"Démarrage de la session avec le dossier: {folder_path}")
+            
         duration_seconds = durations[duration]
         session_window.destroy()  # Fermer la fenêtre de sélection
-        root = tk.Tk()
-        app = ImageViewerApp(root, settings_menu.settings["current_folder"], session_duration=duration_seconds, mode=mode, image_time=image_time, settings_menu=settings_menu)
-        app.run()
+        
+        try:
+            root = tk.Tk()
+            app = ImageViewerApp(root, folder_path, session_duration=duration_seconds, mode=mode, image_time=image_time, settings_menu=settings_menu)
+            app.run()
+        except Exception as e:
+            print(f"Erreur lors du démarrage de l'application: {e}")
+            
+            # Si l'erreur est liée à la récursivité, essayer sans récursivité
+            if settings_menu.settings.get("recursive_read", False):
+                print("Tentative de démarrage sans récursivité...")
+                try:
+                    # Sauvegarder l'état actuel
+                    original_recursive = settings_menu.settings["recursive_read"]
+                    # Désactiver temporairement
+                    settings_menu.settings["recursive_read"] = False
+                    
+                    root = tk.Tk()
+                    app = ImageViewerApp(root, folder_path, session_duration=duration_seconds, mode=mode, image_time=image_time, settings_menu=settings_menu)
+                    
+                    # Restaurer le paramètre original
+                    settings_menu.settings["recursive_read"] = original_recursive
+                    
+                    app.run()
+                    return
+                except Exception as e2:
+                    print(f"Erreur lors de la tentative sans récursivité: {e2}")
+            
+            tk.messagebox.showerror("Erreur", f"Une erreur s'est produite lors du démarrage de l'application: {e}")
+            choose_session_duration()  # Redémarrer le choix de session
     
     session_window = tk.Tk()
     session_window.title("Choisir la durée de la session")

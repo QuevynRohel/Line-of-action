@@ -17,10 +17,22 @@ class SettingsMenu:
 
     def load_settings(self):
         """Charger les paramètres à partir du fichier JSON."""
+        default_settings = {
+            "folders": [],
+            "csv_directory": "",
+            "csv_filename": "session_log.csv",
+            "recursive_read": False
+        }
+        
         if os.path.exists(self.settings_file):
             with open(self.settings_file, 'r') as file:
-                return json.load(file)
-        return {"folders": [], "csv_directory": "", "csv_filename": "session_log.csv"}
+                settings = json.load(file)
+                # S'assurer que tous les paramètres par défaut sont présents
+                for key, value in default_settings.items():
+                    if key not in settings:
+                        settings[key] = value
+                return settings
+        return default_settings
 
     def save_settings(self):
         """Enregistrer les paramètres dans le fichier JSON."""
@@ -39,6 +51,11 @@ class SettingsMenu:
         else:   
             select_folder_button = tk.Button(settings_window, text="Sélectionner un dossier", command=self.select_folder)
         select_folder_button.pack(pady=5, padx=10)
+
+        # Option pour lire récursivement les fichiers
+        recursive_var = tk.BooleanVar(value=self.settings.get("recursive_read", False))
+        recursive_check = tk.Checkbutton(settings_window, text="Lire tous les fichiers récursivement", variable=recursive_var)
+        recursive_check.pack(pady=5, padx=10)
 
         # Afficher l'historique des dossiers
         if self.settings["folders"]:
@@ -67,7 +84,7 @@ class SettingsMenu:
         csv_name_entry.pack(pady=5, padx=10)
 
         # Enregistrer les modifications
-        save_button = tk.Button(settings_window, text="Enregistrer", command=lambda: self.save_csv_settings(csv_name_entry.get()))
+        save_button = tk.Button(settings_window, text="Enregistrer", command=lambda: self.save_csv_settings(csv_name_entry.get(), recursive_var.get()))
         save_button.pack(pady=10)
 
     def select_folder(self):
@@ -104,8 +121,9 @@ class SettingsMenu:
 
             # tk.messagebox.showinfo("Succès", f"Dossier CSV {csv_folder} sélectionné.")
 
-    def save_csv_settings(self, csv_filename):
+    def save_csv_settings(self, csv_filename, recursive_read):
         """Enregistrer le nom du fichier CSV et son dossier."""
         self.settings["csv_filename"] = csv_filename
+        self.settings["recursive_read"] = recursive_read
         self.save_settings()
-        tk.messagebox.showinfo("Succès", "Paramètres CSV sauvegardés.")
+        tk.messagebox.showinfo("Succès", "Paramètres sauvegardés.")
