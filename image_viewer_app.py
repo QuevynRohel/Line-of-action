@@ -274,9 +274,10 @@ class ImageViewerApp:
         """Mettre à jour le minuteur et afficher le temps restant."""
         if not self.paused and self.timer_active:
             time_left = self.end_time - time.time()
-            if time_left <= 0:
+            if time_left <= 0 and self.current_image_time - (time.time() - self.image_start_time)  <= 0:
                 self.timer_active = False
                 self.time_label.config(text="Session terminée.")
+                choose_session_duration()
             else:
                 # Mettre à jour le temps de session et temps restant par image
                 self.session_time_label.config(text=f"Temps total écoulé : {self.format_time(max(0, time_left))} / {self.format_time(self.session_duration)}")
